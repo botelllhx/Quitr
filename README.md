@@ -20,13 +20,11 @@
 
 ---
 
-## O problema
+## Por que o Quitr existe
 
-Empresas brasileiras perdem bilhões por ano com inadimplência. O processo manual de cobrança — planilhas, ligações, WhatsApp individual — é ineficiente, não escala e frequentemente viola o Código de Defesa do Consumidor.
+Quem já trabalhou com cobrança sabe: a maior parte do esforço vai para tarefas repetitivas. Mandar mensagem no WhatsApp um por um, controlar quem respondeu, gerar boleto na mão, cobrar de novo quem não pagou. O processo não escala e ainda corre o risco de violar o CDC se a frequência ou o horário estiver errado.
 
-## A solução
-
-O **Quitr** automatiza toda a régua de cobrança: desde o aviso preventivo antes do vencimento até o envio de proposta de acordo, geração de Pix/boleto e assinatura digital do termo — tudo sem intervenção humana. O credor configura uma régua uma vez e o sistema executa para centenas de devedores simultaneamente, respeitando os limites legais de horário e frequência.
+O Quitr resolve isso com uma régua de cobrança configurável que roda sozinha. O credor monta a régua uma vez, associa às dívidas e o sistema cuida do resto: manda as mensagens nos canais certos, na hora certa, respeita quem pediu para não ser contactado, e quando o devedor está pronto para negociar, gera o link de acordo com as opções de pagamento automaticamente.
 
 ---
 
@@ -38,33 +36,32 @@ O **Quitr** automatiza toda a régua de cobrança: desde o aviso preventivo ante
 
 **Gestão de Devedores**
 - Cadastro manual ou importação em lote via CSV
-- Perfil comportamental automático: Pagador, Negligente, Negociador, Fantasma
-- Score de recuperabilidade 0–100 (recalculado diariamente)
+- Perfil comportamental calculado automaticamente: Pagador, Negligente, Negociador, Fantasma
+- Score de recuperabilidade 0-100 recalculado todo dia
 - Histórico completo de contatos por devedor
 
 **Régua de Cobrança**
-- Builder visual com drag-and-drop
+- Builder visual com drag-and-drop de etapas
 - Canais: WhatsApp, E-mail, SMS
 - Templates com variáveis dinâmicas
 - Condições por etapa (sempre, sem resposta, não abriu)
-- Compliance CDC automático (8h–20h, máx 3x/semana)
+- Compliance CDC automático (8h às 20h, máximo 3 contatos por semana)
 
 </td>
 <td width="50%" valign="top">
 
-**Acordos & Pagamento**
-- Link único por dívida (72h de validade)
-- Portal de autoatendimento para o devedor (sem login)
-- Pagamento via Pix ou boleto (Asaas)
+**Acordos e Pagamento**
+- Link único por dívida com 72h de validade
+- Portal de autoatendimento para o devedor, sem precisar criar conta
+- Pix e boleto via Asaas
 - Parcelamento configurável com desconto progressivo
-- Assinatura digital do termo (Autentique)
+- Assinatura digital do termo via Autentique
 
-**Dashboard & Relatórios**
+**Dashboard e Relatórios**
 - Métricas de recuperação em tempo real
 - Aging list por faixa de atraso
 - Taxa de resposta por canal
-- Score de recuperabilidade com justificativa
-- Exportação de relatório PDF
+- Exportação de relatório em PDF
 
 </td>
 </tr>
@@ -79,9 +76,9 @@ O **Quitr** automatiza toda a régua de cobrança: desde o aviso preventivo ante
                     │        apps/web (porta 3000)     │
                     │  Next.js 14 · shadcn/ui · Tailwind│
                     │  TanStack Table · Recharts        │
-                    └──────────────┬──────────────────-┘
+                    └──────────────┬───────────────────┘
                                    │ HTTP (Bearer token)
-                    ┌──────────────▼──────────────────-┐
+                    ┌──────────────▼───────────────────┐
                     │        apps/api (porta 3001)      │
                     │  Fastify 5 · Zod · @clerk/fastify │
                     └────────┬─────────────┬────────────┘
@@ -96,10 +93,10 @@ O **Quitr** automatiza toda a régua de cobrança: desde o aviso preventivo ante
 |---|---|
 | Frontend | Next.js 14 (App Router), shadcn/ui, Tailwind CSS, TanStack Table, dnd-kit, Recharts |
 | Backend | Fastify 5, TypeScript, Zod |
-| Banco de dados | PostgreSQL 16 via Prisma ORM (soft-delete extension) |
+| Banco de dados | PostgreSQL 16 via Prisma ORM |
 | Filas | BullMQ + Redis |
-| Auth | Clerk (Organizations para multi-tenancy) |
-| WhatsApp | Evolution API (self-hosted) / Z-API |
+| Auth | Clerk com Organizations para multi-tenancy |
+| WhatsApp | Evolution API (self-hosted) ou Z-API |
 | E-mail | Resend |
 | SMS | Zenvia |
 | Pagamentos | Asaas (Pix, boleto, split) |
@@ -111,53 +108,53 @@ O **Quitr** automatiza toda a régua de cobrança: desde o aviso preventivo ante
 
 ---
 
-## Arquitetura
+## Estrutura do projeto
 
-Monorepo gerenciado com [Turborepo](https://turbo.build) e pnpm workspaces.
+Monorepo com [Turborepo](https://turbo.build) e pnpm workspaces.
 
 ```
 quitr/
 ├── apps/
 │   ├── web/                        # Dashboard do credor (Next.js)
 │   │   └── src/app/
-│   │       ├── (auth)/             # Login, cadastro
+│   │       ├── (auth)/             # Login e cadastro
 │   │       ├── (dashboard)/        # Área autenticada
 │   │       │   ├── devedores/      # Listagem, perfil, importação CSV
 │   │       │   ├── reguas/         # Builder visual de régua
 │   │       │   ├── acordos/        # Gestão de acordos
-│   │       │   ├── relatorios/     # Aging list, métricas
-│   │       │   └── settings/       # Configurações, integrações
+│   │       │   ├── relatorios/     # Aging list e métricas
+│   │       │   └── settings/       # Configurações e integrações
 │   │       └── acordo/[token]/     # Portal público do devedor
 │   │
 │   └── api/                        # REST API + jobs (Fastify)
 │       └── src/
 │           ├── modules/
-│           │   ├── devedores/      # CRUD + importação em lote
+│           │   ├── devedores/      # CRUD e importação em lote
 │           │   ├── reguas/         # Engine de régua
-│           │   ├── disparos/       # Fila BullMQ + worker
+│           │   ├── disparos/       # Fila BullMQ e worker
 │           │   ├── acordos/        # Geração e gestão de acordos
 │           │   └── score/          # Score de recuperabilidade
 │           ├── integrations/
 │           │   ├── whatsapp/       # Evolution API / Z-API
-│           │   ├── email/          # Resend + templates
+│           │   ├── email/          # Resend e templates
 │           │   ├── sms/            # Zenvia
 │           │   └── pagamento/      # Asaas
 │           ├── jobs/
-│           │   ├── regua.job.ts    # Cron 08:05 — executa régua
-│           │   └── score.job.ts    # Cron 07:00 — recalcula scores
+│           │   ├── regua.job.ts    # Cron 08:05 - executa régua
+│           │   └── score.job.ts    # Cron 07:00 - recalcula scores
 │           └── middlewares/
-│               ├── auth.ts         # Valida JWT Clerk + upsert tenant
-│               └── tenant.ts       # Isolamento de dados por tenant
+│               ├── auth.ts         # Valida JWT Clerk e faz upsert do tenant
+│               └── tenant.ts       # Isolamento de dados por empresa
 │
 └── packages/
-    ├── db/                         # Prisma schema + client + soft-delete
+    ├── db/                         # Prisma schema, client e extensão de soft-delete
     ├── types/                      # Tipos TypeScript compartilhados
-    └── utils/                      # Formatação, datas, interpolação de templates
+    └── utils/                      # Formatação, datas e interpolação de templates
 ```
 
 ---
 
-## Modelo de Dados
+## Modelo de dados
 
 ```
 Tenant (empresa cliente do SaaS)
@@ -175,14 +172,14 @@ Tenant
 
 ---
 
-## Quick Start
+## Primeiros passos
 
-### Pré-requisitos
+### O que você precisa ter instalado
 
 - [Node.js 20+](https://nodejs.org)
-- [pnpm](https://pnpm.io) — `npm i -g pnpm`
+- [pnpm](https://pnpm.io): `npm i -g pnpm`
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- Conta [Clerk](https://clerk.com) (plano free) com **Organizations** ativado
+- Conta no [Clerk](https://clerk.com) com Organizations ativado (plano free funciona)
 
 ### 1. Clonar e instalar
 
@@ -198,23 +195,22 @@ pnpm install
 cp .env.example .env
 ```
 
-Abra `.env` e preencha as chaves do Clerk:
+Preencha as chaves do Clerk no `.env`:
 
 ```dotenv
-CLERK_SECRET_KEY=sk_test_...           # Clerk Dashboard → API Keys
-CLERK_PUBLISHABLE_KEY=pk_test_...      # idem
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...  # mesma chave
+CLERK_SECRET_KEY=sk_test_...
+CLERK_PUBLISHABLE_KEY=pk_test_...
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 ```
 
-> **Ativar Organizations no Clerk:** Dashboard → Configure → Organizations → Enable Organizations
+As chaves ficam em **Clerk Dashboard > API Keys**. Para ativar Organizations: **Configure > Organizations > Enable Organizations**.
 
 ### 3. Subir com Docker
 
 ```bash
-# Sobe PostgreSQL, Redis, API (porta 3001) e Web (porta 3000)
 docker compose up -d
 
-# Acompanhar logs em tempo real
+# Acompanhar os logs
 docker compose logs -f api web
 ```
 
@@ -225,8 +221,6 @@ docker compose exec api sh -c \
   'cd /app/packages/db && node_modules/.bin/prisma migrate dev --name init'
 ```
 
-Acesse:
-
 | Serviço | URL |
 |---|---|
 | Dashboard | http://localhost:3000 |
@@ -235,80 +229,78 @@ Acesse:
 
 ---
 
-## Desenvolvimento Local (sem Docker)
+## Desenvolvimento local sem Docker
 
-> Requer PostgreSQL e Redis rodando localmente.
+Precisa de PostgreSQL e Redis rodando na máquina.
 
 ```bash
-pnpm dev                         # Sobe tudo em paralelo (Turborepo)
-pnpm dev --filter=@repo/api      # Apenas a API
-pnpm dev --filter=web            # Apenas o frontend
+pnpm dev                         # Sobe tudo em paralelo
+pnpm dev --filter=@repo/api      # Só a API
+pnpm dev --filter=web            # Só o frontend
 
 pnpm db:migrate                  # Rodar migrations pendentes
-pnpm db:studio                   # Abrir Prisma Studio (UI do banco)
+pnpm db:studio                   # Abre o Prisma Studio
 pnpm build                       # Build de produção
-pnpm test                        # Rodar testes (Vitest)
+pnpm test                        # Roda os testes
 ```
 
 ---
 
-## Fluxo de Execução da Régua
+## Como a régua de cobrança funciona
+
+Todo dia às 08:05 (horário de Brasília) um job processa todas as dívidas em aberto:
 
 ```
-08:05 (horário de Brasília) — Job diário inicia
-│
-├── Para cada tenant ativo:
-│   └── Para cada dívida em_aberto ou em_negociacao:
-│       ├── Calcula diasAtraso = hoje − dataVencimento
-│       ├── Busca régua ativa associada à dívida
-│       └── Para cada etapa onde diaOffset ≤ diasAtraso:
-│           ├── Já disparou para esta etapa+dívida? → pula
-│           ├── Devedor tem opt-out? → pula
-│           ├── Atingiu limite de 3 contatos/semana? → pula
-│           ├── Condição da etapa satisfeita? → continua
-│           ├── Interpola template com dados do devedor
-│           ├── Cria Disparo(status=PENDENTE) no banco
-│           └── Enfileira job no BullMQ
-│
-└── Worker (5 instâncias paralelas):
-    ├── Envia mensagem via API do canal
-    ├── Atualiza Disparo com status e timestamp
-    └── Falha: retenta 3× com backoff (15min → 1h → 4h)
+Para cada dívida ativa:
+  1. Calcula quantos dias de atraso tem
+  2. Busca a régua associada à dívida
+  3. Para cada etapa onde diaOffset <= diasAtraso:
+     - Já enviou para esta etapa? Pula.
+     - Devedor pediu opt-out? Pula.
+     - Atingiu o limite semanal de contatos? Pula.
+     - A condição da etapa foi satisfeita? Continua.
+     - Interpola o template com os dados do devedor
+     - Cria o registro do Disparo e enfileira no BullMQ
+
+Worker (5 instâncias simultâneas):
+  - Envia pelo canal configurado (WhatsApp, e-mail ou SMS)
+  - Atualiza o status do Disparo com timestamp
+  - Se falhar: tenta mais 3 vezes com backoff (15min, 1h, 4h)
 ```
 
 ---
 
-## API Reference
+## API
 
-Todas as rotas autenticadas exigem o header `Authorization: Bearer <clerk-jwt>`.
+Todas as rotas autenticadas precisam do header `Authorization: Bearer <clerk-jwt>`.
 
 ### Devedores
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/devedores` | Lista com filtros (`busca`, `perfil`, `status`) e paginação |
-| `GET` | `/devedores/:id` | Perfil completo com dívidas e histórico de disparos |
+| `GET` | `/devedores` | Lista com filtros e paginação |
+| `GET` | `/devedores/:id` | Perfil com dívidas e histórico de disparos |
 | `POST` | `/devedores` | Criar devedor |
 | `PATCH` | `/devedores/:id` | Atualizar dados |
 | `DELETE` | `/devedores/:id` | Soft delete |
-| `POST` | `/devedores/importar` | Importação em lote — retorna `{ criados, atualizados, erros }` |
+| `POST` | `/devedores/importar` | Importação em lote, retorna `{ criados, atualizados, erros }` |
 
-### Portal Público
+### Portal público
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/portal/:token` | Dados da dívida para o devedor (sem auth) |
-| `POST` | `/portal/:token/aceitar` | Aceitar acordo + gerar Pix/boleto |
+| `GET` | `/portal/:token` | Dados da dívida para o devedor (sem autenticação) |
+| `POST` | `/portal/:token/aceitar` | Confirmar acordo e gerar Pix/boleto |
 
 ### Webhooks
 
 | Método | Rota | Origem |
 |---|---|---|
-| `POST` | `/webhooks/clerk` | Criação de tenant via Clerk Organizations |
-| `POST` | `/webhooks/asaas` | Confirmação/vencimento de pagamento |
-| `POST` | `/webhooks/whatsapp/:tenantId` | Mensagem recebida / status de entrega |
+| `POST` | `/webhooks/clerk` | Criação de tenant via Clerk |
+| `POST` | `/webhooks/asaas` | Confirmação ou vencimento de pagamento |
+| `POST` | `/webhooks/whatsapp/:tenantId` | Mensagem recebida ou atualização de status |
 
-### Resposta padrão
+### Formato de resposta
 
 ```typescript
 // Sucesso
@@ -320,104 +312,103 @@ Todas as rotas autenticadas exigem o header `Authorization: Bearer <clerk-jwt>`.
 
 ---
 
-## Regras de Negócio
+## Regras de negócio
 
-| Regra | Detalhe |
+| Regra | Como funciona |
 |---|---|
-| Horário de envio | 08:00–20:00 horário de Brasília (CDC) |
-| Frequência máxima | 3 contatos por semana por devedor |
-| Opt-out | Respeitado imediatamente, sem exceções |
-| Isolamento de dados | Toda query ao banco inclui `WHERE tenantId = ?` |
-| Valores monetários | Armazenados em **centavos** (integer) — nunca float |
-| Soft delete | `deletedAt` — registros nunca removidos fisicamente |
-| Tokens de acordo | UUID v4 — não sequencial, não previsível |
-| Webhook Asaas | Validado via HMAC antes de processar |
+| Horário de envio | Somente entre 08:00 e 20:00 horário de Brasília, conforme o CDC |
+| Frequência | No máximo 3 contatos por semana por devedor |
+| Opt-out | Respeitado imediatamente em todos os canais |
+| Isolamento de dados | Toda query ao banco filtra por `tenantId`, dados nunca vazam entre empresas |
+| Valores monetários | Armazenados em centavos (integer), nunca como float |
+| Soft delete | Registros nunca são apagados fisicamente, apenas marcados com `deletedAt` |
+| Tokens de acordo | UUID v4, não sequencial e não previsível |
+| Webhook Asaas | Validado via HMAC antes de qualquer processamento |
 
 ---
 
-## Score de Recuperabilidade
+## Score de recuperabilidade
 
-Score 0–100 calculado diariamente para cada dívida ativa.
+Calculado diariamente para cada dívida ativa, de 0 a 100.
 
-| Fator | Peso | Critério |
+| Fator | Peso | Lógica |
 |---|---|---|
 | Dias em atraso | 40% | Quanto mais dias, menor a nota |
-| Respondeu última mensagem | 20% | Respondeu nos últimos 7 dias = 100 pts |
-| Tentativas sem resposta | 20% | 6+ tentativas ignoradas = 20 pts |
-| Histórico de pagamento | 10% | Já quitou dívida antes = 100 pts |
+| Respondeu a última mensagem | 20% | Resposta nos últimos 7 dias vale 100 pts |
+| Tentativas sem resposta | 20% | 6 ou mais tentativas ignoradas vale 20 pts |
+| Histórico de pagamento | 10% | Já quitou dívida antes com o mesmo credor vale 100 pts |
 | Valor da dívida | 10% | Dívidas menores têm score ligeiramente maior |
 
-| Faixa | Cor | Ação recomendada |
-|---|---|---|
-| 70–100 | 🟢 Verde | Régua leve + proposta de acordo imediata |
-| 40–69 | 🟡 Amarelo | Régua progressiva + desconto escalonado |
-| 0–39 | 🔴 Vermelho | Negativação + encaminhar para escritório |
+| Faixa | Ação sugerida |
+|---|---|
+| 70 a 100 | Régua leve com proposta de acordo imediata |
+| 40 a 69 | Régua progressiva com desconto escalonado |
+| 0 a 39 | Negativação e encaminhamento para escritório parceiro |
 
 ---
 
-## Variáveis de Ambiente
+## Variáveis de ambiente
 
-Veja [`.env.example`](.env.example) para a lista completa. Obrigatórias para desenvolvimento:
+Veja o [`.env.example`](.env.example) para a lista completa. As obrigatórias para rodar localmente:
 
-| Variável | Onde obter |
+| Variável | Onde encontrar |
 |---|---|
-| `CLERK_SECRET_KEY` | [clerk.com](https://clerk.com) → API Keys |
-| `CLERK_PUBLISHABLE_KEY` | idem |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | idem (mesma chave) |
-| `DATABASE_URL` | Preenchido automaticamente pelo Docker Compose |
-| `REDIS_URL` | Preenchido automaticamente pelo Docker Compose |
+| `CLERK_SECRET_KEY` | [clerk.com](https://clerk.com) > API Keys |
+| `CLERK_PUBLISHABLE_KEY` | mesma página |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | mesma chave |
+| `DATABASE_URL` | gerado automaticamente pelo Docker Compose |
+| `REDIS_URL` | gerado automaticamente pelo Docker Compose |
 
 ---
 
 ## Roadmap
 
-### ✅ Sprint 1 — Fundação
-- Monorepo Turborepo · Next.js 14 · Fastify 5 · Prisma
-- Auth multitenancy com Clerk Organizations
+### Sprint 1 - Fundação ✅
+- Monorepo Turborepo com Next.js 14, Fastify 5 e Prisma
+- Auth e multi-tenancy com Clerk Organizations
 - CRUD de devedores com importação CSV
 - Docker Compose para desenvolvimento local
 
-### 🔄 Sprint 2 — Engine de Cobrança
-- [ ] Builder visual de régua (dnd-kit)
-- [ ] Job cron + filas BullMQ + worker
-- [ ] Integração WhatsApp (Evolution API)
-- [ ] Integração E-mail (Resend + templates React Email)
+### Sprint 2 - Engine de cobrança
+- [ ] Builder visual de régua com dnd-kit
+- [ ] Job cron, filas BullMQ e worker
+- [ ] Integração WhatsApp via Evolution API
+- [ ] Integração e-mail via Resend
 
-### 📋 Sprint 3 — Acordos e Pagamento
-- [ ] Portal público do devedor (`/acordo/:token`)
-- [ ] Integração Asaas (Pix + boleto + webhooks)
-- [ ] Assinatura digital (Autentique)
+### Sprint 3 - Acordos e pagamento
+- [ ] Portal público do devedor em `/acordo/:token`
+- [ ] Integração Asaas com Pix, boleto e webhooks
+- [ ] Assinatura digital via Autentique
 
-### 📊 Sprint 4 — Dashboard e Monetização
+### Sprint 4 - Dashboard e monetização
 - [ ] Dashboard de métricas com Recharts
 - [ ] Score de recuperabilidade com job diário
-- [ ] Relatório aging list exportável em PDF
-- [ ] Billing com Stripe (planos Starter / Pro / Business)
+- [ ] Exportação de aging list em PDF
+- [ ] Billing com Stripe
 
-### 🚀 Fase 2 — Expansão
+### Fase 2
 - [ ] Negativação Serasa via Boa Vista API
-- [ ] Integração ERP (Omie, Bling, Conta Azul)
-- [ ] Voz automatizada (TTS para devedores sem resposta)
+- [ ] Integrações com ERPs brasileiros (Omie, Bling, Conta Azul)
+- [ ] Ligação automatizada por voz para devedores sem resposta
 - [ ] API pública para integrações externas
-- [ ] White-label para administradoras de condomínio
 
 ---
 
-## Checklist de Produção
+## Checklist pré-produção
 
-- [ ] LGPD: política de privacidade, termos de uso, banner de cookies
-- [ ] CDC: validar horários de envio (8h–20h) e frequência máxima
-- [ ] Rate limiting nas rotas públicas (`/portal/:token`)
-- [ ] Tokens de acordo são UUID v4 (não sequenciais)
-- [ ] Webhook Asaas validado via HMAC
+- [ ] Política de privacidade, termos de uso e banner de cookies (LGPD)
+- [ ] Validar horários e frequência de envio conforme o CDC
+- [ ] Rate limiting nas rotas públicas do portal
+- [ ] Tokens de acordo sendo gerados como UUID v4
+- [ ] Webhook do Asaas com validação HMAC
 - [ ] API keys de terceiros criptografadas no banco
 - [ ] Sentry configurado nos dois apps
-- [ ] SPF/DKIM/DMARC configurado no domínio de e-mail (Resend guia)
-- [ ] Backup automático do PostgreSQL (Railway inclui)
-- [ ] Testar fluxo completo no sandbox antes de ir a produção
+- [ ] SPF, DKIM e DMARC no domínio de e-mail
+- [ ] Backup automático do PostgreSQL ativo
+- [ ] Fluxo completo testado no ambiente de sandbox
 
 ---
 
 ## Licença
 
-Código proprietário — todos os direitos reservados. Uso, cópia ou distribuição sem autorização expressa são proibidos.
+Código proprietário. Todos os direitos reservados.
