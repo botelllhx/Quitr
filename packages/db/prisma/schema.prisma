@@ -22,6 +22,7 @@ enum PerfilDevedor {
   negligente
   negociador
   fantasma
+  reincidente
 }
 
 enum StatusDivida {
@@ -53,6 +54,13 @@ enum AcaoEtapa {
   protestar
 }
 
+enum TipoIntegracao {
+  WHATSAPP_EVOLUTION
+  WHATSAPP_ZAPI
+  EMAIL_RESEND
+  SMS_ZENVIA
+}
+
 enum StatusDisparo {
   pendente
   enviado
@@ -65,6 +73,7 @@ enum StatusDisparo {
 enum StatusAcordo {
   pendente
   ativo
+  assinado
   quitado
   inadimplente
   cancelado
@@ -84,17 +93,30 @@ model Tenant {
   nome  String  @default("")
   cnpj  String?
   email String  @default("")
-  plano String  @default("trial")
-  ativo Boolean @default(true)
+  plano           String  @default("trial")
+  ativo           Boolean @default(true)
+  telefoneEmpresa String  @default("")
 
   multaPercentual Decimal @default(2.00) @db.Decimal(5, 2)
   jurosMensais    Decimal @default(1.00) @db.Decimal(5, 2)
 
+  // Stripe / assinatura
+  stripeCustomerId  String?
+  stripePriceId     String?
+  trialFim          DateTime?
+  assinaturaStatus  String  @default("trial")   // trial | ativa | inadimplente | cancelada
+
+  // Configurações de acordo
+  diasToleranciaQuebraAcordo Int     @default(5)
+  limiteRefatoracoes         Int     @default(2)
+  multaQuebraAcordo          Decimal @default(10.00) @db.Decimal(5, 2)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  devedores Devedor[]
-  reguas    Regua[]
+  devedores    Devedor[]
+  reguas       Regua[]
+  integracoes  Integracao[]
 
   @@map("tenants")
 }
@@ -111,8 +133,12 @@ model Devedor {
   perfil   PerfilDevedor @default(pagador)
   endereco Json?
 
-  optOut   Boolean   @default(false)
-  optOutAt DateTime?
+  optOut          Boolean   @default(false)
+  optOutAt        DateTime?
+  acordosQuebrados Int      @default(0)
+
+  scoreContactabilidade Int @default(50)
+  cobradorId            String?   // Clerk userId do cobrador responsável pela carteira
 
   // Soft delete
   deletedAt DateTime?
@@ -120,8 +146,9 @@ model Devedor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  dividas Divida[]
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dividas  Divida[]
+  contatos ContatoDevedor[]
 
   @@unique([tenantId, cpfCnpj], map: "devedores_tenant_cpfCnpj_key")
   @@index([tenantId])
@@ -174,6 +201,7 @@ model Regua {
   nome      String
   descricao String?
   ativa     Boolean @default(true)
+  padrao    Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -203,6 +231,7 @@ model EtapaRegua {
   regua    Regua     @relation(fields: [reguaId], references: [id], onDelete: Cascade)
   disparos Disparo[]
 
+  @@unique([reguaId, diaOffset])
   @@index([reguaId])
   @@map("etapas_regua")
 }
@@ -224,6 +253,7 @@ model Disparo {
   respondidoAt DateTime?
   falhouAt     DateTime?
   erroMsg      String?
+  externalId   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -237,6 +267,23 @@ model Disparo {
   @@map("disparos")
 }
 
+model Integracao {
+  id       String         @id @default(cuid())
+  tenantId String
+  tipo     TipoIntegracao
+  config   Json
+  ativa    Boolean        @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, tipo])
+  @@index([tenantId])
+  @@map("integracoes")
+}
+
 model Acordo {
   id       String @id @default(cuid())
   tenantId String
@@ -247,15 +294,21 @@ model Acordo {
   numeroParcelas Int
   status         StatusAcordo @default(pendente)
 
+  tentativasRefatoracao Int     @default(0)
+  acordoAnteriorId      String?
+
   documentoUrl String?
   assinadoAt   DateTime?
+  inadimplenteAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  divida    Divida     @relation(fields: [dividaId], references: [id], onDelete: Cascade)
-  parcelas  Parcela[]
-  cobrancas Cobranca[]
+  divida         Divida     @relation(fields: [dividaId], references: [id], onDelete: Cascade)
+  parcelas       Parcela[]
+  cobrancas      Cobranca[]
+  acordoAnterior Acordo?    @relation("HistoricoAcordo", fields: [acordoAnteriorId], references: [id])
+  acordosFilhos  Acordo[]   @relation("HistoricoAcordo")
 
   @@index([tenantId])
   @@index([dividaId])
@@ -270,7 +323,7 @@ model Parcela {
   valor      Int
   vencimento DateTime
   status     StatusParcela @default(pendente)
-  paidAt     DateTime?
+  pagoEm     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -289,11 +342,13 @@ model Cobranca {
   parcelaId String?
 
   asaasId       String  @unique
-  tipo          String // pix | boleto
+  tipo          String  // pix | boleto
   valor         Int
   status        String  @default("pending")
-  linkPagamento String?
-  paidAt        DateTime?
+  linkPagamento String? // URL do boleto
+  pixCopiaECola String? // string EMV para copiar e colar
+  pixQrCodeImg  String? // base64 PNG do QR code retornado pelo Asaas
+  pagoEm        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -305,3 +360,77 @@ model Cobranca {
   @@index([acordoId])
   @@map("cobrancas")
 }
+
+// ─── Contatos do devedor (bureau / manual) ────────────────────────────────────
+
+model ContatoDevedor {
+  id        String @id @default(cuid())
+  devedorId String
+  tenantId  String
+
+  valor  String   // número de telefone (E.164) ou e-mail
+  tipo   String   // "telefone" | "email"
+  fonte  String   // "credor" | "bureau_bigdatacorp" | "bureau_assertiva" | "devedor_confirmou"
+  status String   @default("ativo")  // "ativo" | "pendente_confirmacao" | "invalido" | "optout"
+
+  scoreConfianca     Int?     // 0–100, retornado pelo bureau
+  consultaFinalidade String?  // "cobrança de dívida própria — CDC Art. 42"
+  consultaAt         DateTime?
+  consultaIp         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  devedor Devedor @relation(fields: [devedorId], references: [id], onDelete: Cascade)
+
+  @@index([devedorId])
+  @@index([tenantId])
+  @@map("contatos_devedor")
+}
+
+// ─── Comissão da equipe ───────────────────────────────────────────────────────
+
+model FechamentoComissao {
+  id       String @id @default(cuid())
+  tenantId String
+
+  mes  Int   // 1–12
+  ano  Int
+  status String @default("aberto")  // "aberto" | "fechado"
+
+  totalRecuperado Int    @default(0)  // centavos
+  totalComissao   Int    @default(0)  // centavos
+  pdfUrl          String?
+  fechadoAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens ComissaoItem[]
+
+  @@unique([tenantId, mes, ano])
+  @@index([tenantId])
+  @@map("fechamentos_comissao")
+}
+
+model ComissaoItem {
+  id           String @id @default(cuid())
+  fechamentoId String
+
+  cobradorId   String  // Clerk userId
+  cobradorNome String
+
+  valorRecuperado Int    // centavos
+  comissao        Int    // centavos
+  percentual      Decimal @db.Decimal(5,2)
+  acordosFechados Int    @default(0)
+  acordosQuebrados Int   @default(0)
+
+  createdAt DateTime @default(now())
+
+  fechamento FechamentoComissao @relation(fields: [fechamentoId], references: [id], onDelete: Cascade)
+
+  @@index([fechamentoId])
+  @@map("comissao_itens")
+}
+

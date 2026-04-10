@@ -120,28 +120,33 @@ quitr/
 │   │       ├── (auth)/             # Login e cadastro
 │   │       ├── (dashboard)/        # Área autenticada
 │   │       │   ├── devedores/      # Listagem, perfil, importação CSV
-│   │       │   ├── reguas/         # Builder visual de régua
+│   │       │   ├── reguas/         # Builder visual de régua (dnd-kit)
 │   │       │   ├── acordos/        # Gestão de acordos
 │   │       │   ├── relatorios/     # Aging list e métricas
-│   │       │   └── settings/       # Configurações e integrações
+│   │       │   └── settings/
+│   │       │       └── integracoes/ # Card de config WhatsApp/Resend/Zenvia
 │   │       └── acordo/[token]/     # Portal público do devedor
 │   │
 │   └── api/                        # REST API + jobs (Fastify)
 │       └── src/
 │           ├── modules/
 │           │   ├── devedores/      # CRUD e importação em lote
-│           │   ├── reguas/         # Engine de régua
-│           │   ├── disparos/       # Fila BullMQ e worker
+│           │   ├── reguas/         # Builder e engine de régua
+│           │   ├── disparos/       # Fila BullMQ e worker (retry exponencial)
+│           │   ├── integracoes/    # CRUD de credenciais por canal
+│           │   ├── portal/         # Portal público do devedor (token, aceitar acordo)
+│           │   ├── webhooks/       # Clerk, Asaas, WhatsApp
 │           │   ├── acordos/        # Geração e gestão de acordos
 │           │   └── score/          # Score de recuperabilidade
 │           ├── integrations/
-│           │   ├── whatsapp/       # Evolution API / Z-API
-│           │   ├── email/          # Resend e templates
+│           │   ├── whatsapp/       # EvolutionClient (config por tenant)
+│           │   ├── email/          # Resend + templates HTML (cobrança e acordo)
 │           │   ├── sms/            # Zenvia
-│           │   └── pagamento/      # Asaas
+│           │   └── pagamento/      # Asaas (Pix + boleto)
 │           ├── jobs/
-│           │   ├── regua.job.ts    # Cron 08:05 - executa régua
-│           │   └── score.job.ts    # Cron 07:00 - recalcula scores
+│           │   ├── regua.job.ts           # Cron 08:05 - executa régua
+│           │   ├── score.job.ts           # Cron 07:00 - recalcula scores
+│           │   └── acordo-vencido.job.ts  # Cron 09:00 - detecta quebras de acordo
 │           └── middlewares/
 │               ├── auth.ts         # Valida JWT Clerk e faz upsert do tenant
 │               └── tenant.ts       # Isolamento de dados por empresa
@@ -158,16 +163,15 @@ quitr/
 
 ```
 Tenant (empresa cliente do SaaS)
-  └── Devedor (cliente inadimplente)
-        └── Divida (contrato de dívida)
-              ├── Disparo (cada mensagem enviada)
-              └── Acordo (proposta aceita)
-                    ├── Parcela (cada prestação)
-                    └── Cobranca (boleto/Pix no Asaas)
-
-Tenant
-  └── Regua (template de régua de cobrança)
-        └── EtapaRegua (cada step da régua)
+  ├── Devedor (cliente inadimplente)
+  │     └── Divida (contrato de dívida)
+  │           ├── Disparo (cada mensagem enviada ou recebida)
+  │           └── Acordo (proposta aceita)
+  │                 ├── Parcela (cada prestação)
+  │                 └── Cobranca (boleto/Pix no Asaas)
+  ├── Regua (template de régua de cobrança)
+  │     └── EtapaRegua (cada step da régua)
+  └── Integracao (credenciais por canal — WhatsApp, e-mail, SMS)
 ```
 
 ---
@@ -285,12 +289,50 @@ Todas as rotas autenticadas precisam do header `Authorization: Bearer <clerk-jwt
 | `DELETE` | `/devedores/:id` | Soft delete |
 | `POST` | `/devedores/importar` | Importação em lote, retorna `{ criados, atualizados, erros }` |
 
+### Réguas
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/reguas` | Lista de réguas do tenant |
+| `POST` | `/reguas` | Criar nova régua |
+| `GET` | `/reguas/:id` | Buscar régua com etapas |
+| `PATCH` | `/reguas/:id` | Atualizar nome, descrição, status, padrão |
+| `DELETE` | `/reguas/:id` | Remover régua |
+| `POST` | `/reguas/:id/etapas` | Adicionar etapa |
+| `PATCH` | `/reguas/:id/etapas/:etapaId` | Atualizar etapa |
+| `DELETE` | `/reguas/:id/etapas/:etapaId` | Remover etapa |
+| `PUT` | `/reguas/:id/etapas/reordenar` | Salvar nova ordem das etapas |
+
+### Integrações
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/integracoes/whatsapp` | Retorna config atual (API key mascarada) |
+| `PUT` | `/integracoes/whatsapp` | Salva ou atualiza credenciais da Evolution API |
+| `DELETE` | `/integracoes/whatsapp` | Desativa a integração |
+| `GET` | `/integracoes/whatsapp/testar` | Testa a conexão com a instância |
+
 ### Portal público
 
 | Método | Rota | Descrição |
 |---|---|---|
 | `GET` | `/portal/:token` | Dados da dívida para o devedor (sem autenticação) |
 | `POST` | `/portal/:token/aceitar` | Confirmar acordo e gerar Pix/boleto |
+
+### Acordos
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/acordos` | Lista acordos do tenant com filtros (status, devedorId, page, limit) |
+| `GET` | `/acordos/:id` | Detalhe com parcelas, cobranças, histórico de refatoração |
+| `POST` | `/acordos/:id/refatorar` | Refatora acordo inadimplente — calcula novo valor + parcelas |
+
+### Webhooks externos
+
+| Método | Rota | Origem | Evento |
+|---|---|---|---|
+| `POST` | `/webhooks/asaas` | Asaas | `PAYMENT_RECEIVED/CONFIRMED` → parcela paga; `PAYMENT_OVERDUE` → parcela vencida |
+| `POST` | `/webhooks/autentique` | Autentique | `document.signed` → acordo assinado + URL do PDF |
 
 ### Webhooks
 
@@ -299,6 +341,7 @@ Todas as rotas autenticadas precisam do header `Authorization: Bearer <clerk-jwt
 | `POST` | `/webhooks/clerk` | Criação de tenant via Clerk |
 | `POST` | `/webhooks/asaas` | Confirmação ou vencimento de pagamento |
 | `POST` | `/webhooks/whatsapp/:tenantId` | Mensagem recebida ou atualização de status |
+| `GET` | `/track/open/:disparoId` | Pixel 1×1 de rastreamento de abertura de e-mail |
 
 ### Formato de resposta
 
@@ -369,16 +412,25 @@ Veja o [`.env.example`](.env.example) para a lista completa. As obrigatórias pa
 - CRUD de devedores com importação CSV
 - Docker Compose para desenvolvimento local
 
-### Sprint 2 - Engine de cobrança
-- [ ] Builder visual de régua com dnd-kit
-- [ ] Job cron, filas BullMQ e worker
-- [ ] Integração WhatsApp via Evolution API
-- [ ] Integração e-mail via Resend
+### Sprint 2 - Engine de cobrança ✅
+- [x] Builder visual de régua com dnd-kit
+- [x] Job cron, filas BullMQ e worker de disparo com retry exponencial
+- [x] Integração WhatsApp via Evolution API (config por tenant + webhook de resposta e status)
+- [x] Integração e-mail via Resend (templates HTML de cobrança e acordo + pixel de rastreamento de abertura)
 
-### Sprint 3 - Acordos e pagamento
-- [ ] Portal público do devedor em `/acordo/:token`
-- [ ] Integração Asaas com Pix, boleto e webhooks
-- [ ] Assinatura digital via Autentique
+### Sprint 3 - Acordos e pagamento ✅ (3.1 + 3.2)
+- [x] Portal público do devedor em `/acordo/:token` — 3 estados (opções, carregando, confirmação Pix/boleto)
+- [x] Integração Asaas — cliente HTTP com `buscarOuCriarCliente`, `criarCobrancaPix`, `criarCobrancaBoleto`
+- [x] Geração de Acordo + Parcelas + Cobranças no banco ao aceitar proposta
+- [x] QR Code Pix + copia-e-cola + links de boleto para demais parcelas
+- [x] Ciclo de vida completo do acordo: quebra automática + refatoração com saldo recalculado
+- [x] Job cron `acordo-vencido` às 09:00 BRT — detecta inadimplências e notifica devedor/credor
+- [x] `POST /acordos/:id/refatorar` — novo acordo com juros pro-rata + multa de quebra configurável
+- [x] Dashboard de acordos com tabela, filtros e timeline do acordo por devedor
+- [x] Webhook Asaas — `PAYMENT_RECEIVED/CONFIRMED` quita parcela, verifica quitação total do acordo; `PAYMENT_OVERDUE` marca parcela como vencida
+- [x] Autentique — geração de documento HTML com template completo + envio para assinatura digital
+- [x] Webhook Autentique — `document.signed` marca acordo como `assinado` + salva URL do PDF
+- [x] WhatsApp automático ao devedor após aceitar acordo (com link de assinatura se disponível)
 
 ### Sprint 4 - Dashboard e monetização
 - [ ] Dashboard de métricas com Recharts
@@ -401,7 +453,7 @@ Veja o [`.env.example`](.env.example) para a lista completa. As obrigatórias pa
 - [ ] Rate limiting nas rotas públicas do portal
 - [ ] Tokens de acordo sendo gerados como UUID v4
 - [ ] Webhook do Asaas com validação HMAC
-- [ ] API keys de terceiros criptografadas no banco
+- [ ] API keys de terceiros criptografadas no banco (campo `config` da `Integracao` — hoje em texto plano no JSONB)
 - [ ] Sentry configurado nos dois apps
 - [ ] SPF, DKIM e DMARC no domínio de e-mail
 - [ ] Backup automático do PostgreSQL ativo

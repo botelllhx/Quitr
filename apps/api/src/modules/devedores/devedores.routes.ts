@@ -7,6 +7,12 @@ import {
   ListarDevedoresQuerySchema,
 } from './devedores.schema'
 import * as service from './devedores.service'
+import {
+  consultarBureau,
+  aprovarContato,
+  rejeitarContato,
+  listarContatos,
+} from '../bureau/consulta.service'
 
 export async function devedoresRoutes(fastify: FastifyInstance) {
   // Todas as rotas deste plugin exigem autenticação
@@ -77,5 +83,34 @@ export async function devedoresRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string }
     await service.softDeleteDevedor(request.user.tenantId, id)
     return reply.status(204).send()
+  })
+
+  // ── GET /devedores/:id/contatos ───────────────────────────────────────────
+  fastify.get('/:id/contatos', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const contatos = await listarContatos(request.user.tenantId, id)
+    return reply.send({ data: contatos })
+  })
+
+  // ── POST /devedores/:id/bureau — consulta e salva contatos pendentes ──────
+  fastify.post('/:id/bureau', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const ip = request.ip
+    const result = await consultarBureau(request.user.tenantId, id, ip)
+    return reply.status(result.reaproveitado ? 200 : 201).send({ data: result })
+  })
+
+  // ── POST /devedores/:id/contatos/:contatoId/aprovar ───────────────────────
+  fastify.post('/:id/contatos/:contatoId/aprovar', async (request, reply) => {
+    const { id, contatoId } = request.params as { id: string; contatoId: string }
+    const contato = await aprovarContato(request.user.tenantId, id, contatoId)
+    return reply.send({ data: contato })
+  })
+
+  // ── POST /devedores/:id/contatos/:contatoId/rejeitar ──────────────────────
+  fastify.post('/:id/contatos/:contatoId/rejeitar', async (request, reply) => {
+    const { id, contatoId } = request.params as { id: string; contatoId: string }
+    const contato = await rejeitarContato(request.user.tenantId, id, contatoId)
+    return reply.send({ data: contato })
   })
 }

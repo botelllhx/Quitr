@@ -3,12 +3,29 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@repo/db": ["../../packages/db/src"],
-      "@repo/types": ["../../packages/types/src"],
-      "@repo/utils": ["../../packages/utils/src"]
-    }
+      "@/*": [
+        "./src/*"
+      ],
+      "@repo/db": [
+        "../../packages/db/src"
+      ],
+      "@repo/types": [
+        "../../packages/types/src"
+      ],
+      "@repo/utils": [
+        "../../packages/utils/src"
+      ]
+    },
+    "noEmit": true,
+    "isolatedModules": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

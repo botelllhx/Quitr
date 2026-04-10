@@ -46,8 +46,9 @@ type Devedor = {
   nome: string
   cpfCnpj: string | null
   telefone: string | null
-  perfil: 'pagador' | 'negligente' | 'negociador' | 'fantasma'
+  perfil: 'pagador' | 'negligente' | 'negociador' | 'fantasma' | 'reincidente'
   scoreAtual: number
+  scoreContactabilidade: number
   totalEmAberto: number
   dividasCount: number
   updatedAt: string
@@ -62,6 +63,7 @@ const PERFIL_LABELS: Record<Devedor['perfil'], string> = {
   negligente: 'Negligente',
   negociador: 'Negociador',
   fantasma: 'Fantasma',
+  reincidente: 'Reincidente',
 }
 
 const PERFIL_VARIANT: Record<
@@ -72,6 +74,7 @@ const PERFIL_VARIANT: Record<
   negligente: 'warning',
   negociador: 'secondary',
   fantasma: 'outline',
+  reincidente: 'danger',
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -162,8 +165,19 @@ export function DevedoresTable({ data, meta }: DevedoresTableProps) {
     },
     {
       accessorKey: 'scoreAtual',
-      header: 'Score',
-      cell: ({ row }) => <ScoreBadge score={row.getValue<number>('scoreAtual')} />,
+      header: 'R',
+      cell: ({ row }) => (
+        <div className="flex flex-col items-start gap-0.5">
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400 w-3">R</span>
+            <ScoreBadge score={row.getValue<number>('scoreAtual')} />
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400 w-3">C</span>
+            <ScoreBadge score={row.original.scoreContactabilidade} />
+          </div>
+        </div>
+      ),
     },
     {
       accessorKey: 'perfil',

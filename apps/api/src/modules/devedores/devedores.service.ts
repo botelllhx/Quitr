@@ -81,6 +81,8 @@ export async function listarDevedores(tenantId: string, filtros: ListarDevedores
       updatedAt: d.updatedAt,
       totalEmAberto,
       scoreAtual,
+      scoreContactabilidade: d.scoreContactabilidade,
+      cobradorId: d.cobradorId,
       dividasCount: d.dividas.length,
     }
   })

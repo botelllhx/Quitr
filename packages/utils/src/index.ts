@@ -29,6 +29,16 @@ export function getDiasAtraso(dataVencimento: Date): number {
 
 export { addDays, format }
 
+/**
+ * Diferença em dias entre hoje (Brasília) e uma data de referência.
+ * Pode retornar negativo para datas futuras (ao contrário de getDiasAtraso).
+ */
+export function calcularDiasOffset(dataReferencia: Date): number {
+  const hoje = toZonedTime(new Date(), TZ_BRASILIA)
+  const ref = toZonedTime(dataReferencia, TZ_BRASILIA)
+  return differenceInDays(hoje, ref)
+}
+
 // ─── Valores monetários ───────────────────────────────────────────────────────
 
 /** Formata centavos em BRL, ex: 15000 → "R$ 150,00" */
@@ -66,7 +76,9 @@ export function calcularValorAtualizado(
 
 // ─── Templates de mensagem ────────────────────────────────────────────────────
 
-/** Interpola variáveis em template. Nunca executa como código. */
+export { interpolarTemplate, type InterpolationVars } from './template'
+
+/** @deprecated Use interpolarTemplate */
 export function interpolateTemplate(template: string, vars: TemplateVars): string {
   return template
     .replace(/\{nome\}/g, vars.nome)

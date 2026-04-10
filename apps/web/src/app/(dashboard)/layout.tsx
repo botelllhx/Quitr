@@ -9,21 +9,38 @@ import {
   HandshakeIcon,
   BarChart3,
   Settings,
+  DollarSign,
+  AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { db } from '@repo/db'
 
 const navLinks = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/devedores', label: 'Devedores', icon: Users },
   { href: '/reguas', label: 'Réguas', icon: FileText },
   { href: '/acordos', label: 'Acordos', icon: HandshakeIcon },
+  { href: '/comissao', label: 'Comissão', icon: DollarSign },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ]
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = await auth()
+  const { userId, orgId } = await auth()
   if (!userId) redirect('/login')
+
+  // Trial banner
+  let diasTrial: number | null = null
+  if (orgId) {
+    const tenant = await db.tenant.findUnique({
+      where: { id: orgId },
+      select: { assinaturaStatus: true, trialFim: true },
+    })
+    if (tenant?.assinaturaStatus === 'trial' && tenant.trialFim) {
+      const diff = new Date(tenant.trialFim).getTime() - Date.now()
+      diasTrial = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -60,6 +77,25 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       {/* ── Conteúdo principal ────────────────────────────────────────────── */}
       <main className="flex flex-1 flex-col overflow-y-auto">
+        {/* Trial banner */}
+        {diasTrial !== null && (
+          <div className={`flex items-center gap-3 px-6 py-2.5 text-sm ${
+            diasTrial <= 3
+              ? 'bg-red-50 border-b border-red-200 text-red-800'
+              : 'bg-yellow-50 border-b border-yellow-200 text-yellow-800'
+          }`}>
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>
+              {diasTrial > 0
+                ? `Trial gratuito: ${diasTrial} dia${diasTrial !== 1 ? 's' : ''} restante${diasTrial !== 1 ? 's' : ''}.`
+                : 'Seu trial encerrou.'}
+              {' '}
+              <Link href="/settings/plano" className="font-semibold underline underline-offset-2">
+                Assinar agora
+              </Link>
+            </span>
+          </div>
+        )}
         <div className="flex-1 p-8">{children}</div>
       </main>
     </div>
