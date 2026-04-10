@@ -1,0 +1,16 @@
+{
+  "extends": "@repo/typescript-config/node.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "paths": {
+      "@/lib/*": ["./src/lib/*"],
+      "@/modules/*": ["./src/modules/*"],
+      "@/integrations/*": ["./src/integrations/*"],
+      "@/jobs/*": ["./src/jobs/*"],
+      "@/middlewares/*": ["./src/middlewares/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

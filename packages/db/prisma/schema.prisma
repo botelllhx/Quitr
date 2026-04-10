@@ -1,0 +1,307 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum TipoDevedor {
+  PF
+  PJ
+}
+
+enum PerfilDevedor {
+  pagador
+  negligente
+  negociador
+  fantasma
+}
+
+enum StatusDivida {
+  em_aberto
+  em_negociacao
+  acordo_firmado
+  quitada
+  protestada
+  negativada
+}
+
+enum CanalEtapa {
+  whatsapp
+  email
+  sms
+}
+
+enum CondicaoEtapa {
+  sempre
+  semResposta
+  comResposta
+  naoAbriu
+}
+
+enum AcaoEtapa {
+  enviarMensagem
+  gerarAcordo
+  negativar
+  protestar
+}
+
+enum StatusDisparo {
+  pendente
+  enviado
+  entregue
+  lido
+  respondido
+  falhou
+}
+
+enum StatusAcordo {
+  pendente
+  ativo
+  quitado
+  inadimplente
+  cancelado
+}
+
+enum StatusParcela {
+  pendente
+  paga
+  vencida
+  cancelada
+}
+
+// ─── Entidades ────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id    String @id  // = Clerk org ID (org_xxx)
+  nome  String  @default("")
+  cnpj  String?
+  email String  @default("")
+  plano String  @default("trial")
+  ativo Boolean @default(true)
+
+  multaPercentual Decimal @default(2.00) @db.Decimal(5, 2)
+  jurosMensais    Decimal @default(1.00) @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  devedores Devedor[]
+  reguas    Regua[]
+
+  @@map("tenants")
+}
+
+model Devedor {
+  id       String @id @default(cuid())
+  tenantId String
+
+  nome     String
+  cpfCnpj  String?
+  email    String?
+  telefone String?
+  tipo     TipoDevedor   @default(PF)
+  perfil   PerfilDevedor @default(pagador)
+  endereco Json?
+
+  optOut   Boolean   @default(false)
+  optOutAt DateTime?
+
+  // Soft delete
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dividas Divida[]
+
+  @@unique([tenantId, cpfCnpj], map: "devedores_tenant_cpfCnpj_key")
+  @@index([tenantId])
+  @@index([deletedAt])
+  @@map("devedores")
+}
+
+model Divida {
+  id        String @id @default(cuid())
+  tenantId  String
+  devedorId String
+
+  descricao       String?
+  valorOriginal   Int
+  valorAtualizado Int
+  dataVencimento  DateTime
+  status          StatusDivida @default(em_aberto)
+  score           Int          @default(50)
+
+  acordoToken    String?   @unique
+  acordoTokenExp DateTime?
+
+  multaPercentual Decimal @db.Decimal(5, 2)
+  jurosMensais    Decimal @db.Decimal(5, 2)
+
+  reguaId String?
+
+  // Soft delete
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  devedor  Devedor    @relation(fields: [devedorId], references: [id], onDelete: Cascade)
+  regua    Regua?     @relation(fields: [reguaId], references: [id])
+  disparos Disparo[]
+  acordos  Acordo[]
+
+  @@index([tenantId])
+  @@index([devedorId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("dividas")
+}
+
+model Regua {
+  id       String @id @default(cuid())
+  tenantId String
+
+  nome      String
+  descricao String?
+  ativa     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  etapas  EtapaRegua[]
+  dividas Divida[]
+
+  @@index([tenantId])
+  @@map("reguas")
+}
+
+model EtapaRegua {
+  id      String @id @default(cuid())
+  reguaId String
+  ordem   Int
+
+  diaOffset        Int
+  canal            CanalEtapa
+  mensagemTemplate String
+  condicao         CondicaoEtapa @default(sempre)
+  acao             AcaoEtapa     @default(enviarMensagem)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  regua    Regua     @relation(fields: [reguaId], references: [id], onDelete: Cascade)
+  disparos Disparo[]
+
+  @@index([reguaId])
+  @@map("etapas_regua")
+}
+
+model Disparo {
+  id       String  @id @default(cuid())
+  tenantId String
+  dividaId String
+  etapaId  String?
+
+  canal      CanalEtapa
+  conteudo   String
+  status     StatusDisparo @default(pendente)
+  tentativas Int           @default(0)
+
+  enviadoAt    DateTime?
+  entregueAt   DateTime?
+  lidoAt       DateTime?
+  respondidoAt DateTime?
+  falhouAt     DateTime?
+  erroMsg      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  divida Divida      @relation(fields: [dividaId], references: [id], onDelete: Cascade)
+  etapa  EtapaRegua? @relation(fields: [etapaId], references: [id])
+
+  @@index([tenantId])
+  @@index([dividaId])
+  @@index([status])
+  @@map("disparos")
+}
+
+model Acordo {
+  id       String @id @default(cuid())
+  tenantId String
+  dividaId String
+
+  valorTotal     Int
+  valorEntrada   Int          @default(0)
+  numeroParcelas Int
+  status         StatusAcordo @default(pendente)
+
+  documentoUrl String?
+  assinadoAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  divida    Divida     @relation(fields: [dividaId], references: [id], onDelete: Cascade)
+  parcelas  Parcela[]
+  cobrancas Cobranca[]
+
+  @@index([tenantId])
+  @@index([dividaId])
+  @@map("acordos")
+}
+
+model Parcela {
+  id       String @id @default(cuid())
+  acordoId String
+
+  numero     Int
+  valor      Int
+  vencimento DateTime
+  status     StatusParcela @default(pendente)
+  paidAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  acordo    Acordo     @relation(fields: [acordoId], references: [id], onDelete: Cascade)
+  cobrancas Cobranca[]
+
+  @@index([acordoId])
+  @@map("parcelas")
+}
+
+model Cobranca {
+  id        String  @id @default(cuid())
+  tenantId  String
+  acordoId  String
+  parcelaId String?
+
+  asaasId       String  @unique
+  tipo          String // pix | boleto
+  valor         Int
+  status        String  @default("pending")
+  linkPagamento String?
+  paidAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  acordo  Acordo   @relation(fields: [acordoId], references: [id], onDelete: Cascade)
+  parcela Parcela? @relation(fields: [parcelaId], references: [id])
+
+  @@index([tenantId])
+  @@index([acordoId])
+  @@map("cobrancas")
+}

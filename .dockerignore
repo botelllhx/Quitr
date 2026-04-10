@@ -1,0 +1,32 @@
+# Dependências instaladas localmente (serão reinstaladas na imagem)
+node_modules
+apps/*/node_modules
+packages/*/node_modules
+
+# Build outputs
+apps/web/.next
+apps/api/dist
+apps/api/tsconfig.tsbuildinfo
+apps/web/tsconfig.tsbuildinfo
+
+# Git
+.git
+.gitignore
+
+# Env (injetado pelo docker-compose em runtime)
+.env
+.env.local
+.env.*.local
+
+# Logs
+**/*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea

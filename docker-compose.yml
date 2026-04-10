@@ -1,0 +1,86 @@
+# ── Para desenvolvimento ──────────────────────────────────────────────────────
+# docker compose up -d postgres redis   # só infra (apps rodando local)
+# docker compose up -d                  # tudo em Docker (build automático)
+# docker compose build --no-cache       # rebuild após mudanças de dependência
+#
+# Migrations (primeira vez ou após adicionar migrations):
+# docker compose exec api sh -c "pnpm --filter=@repo/db migrate:deploy"
+
+services:
+  # ── Banco de dados ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: quitr
+      POSTGRES_PASSWORD: quitr
+      POSTGRES_DB: cobranca_saas
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U quitr -d cobranca_saas']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Cache / filas ──────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── API Fastify ────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: dev
+    ports:
+      - '3001:3001'
+    env_file:
+      - .env
+    environment:
+      # Sobrescreve .env para apontar para os containers
+      DATABASE_URL: postgresql://quitr:quitr@postgres:5432/cobranca_saas
+      REDIS_URL: redis://redis:6379
+      PORT: '3001'
+      HOST: '0.0.0.0'
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Frontend Next.js ───────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      # No container, api é resolvida pelo nome do serviço
+      API_URL: http://api:3001
+      # No browser, continua sendo localhost (porta exposta)
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NODE_ENV: development
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
